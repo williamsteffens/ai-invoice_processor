@@ -1,33 +1,17 @@
-from openai import OpenAI
-
+from app.ai.gemini_provider import GeminiProvider
 from app.ai.prompts import SYSTEM_PROMPT
 from app.ai.schemas import Invoice
-from app.core.config import settings
 
-client = OpenAI(api_key=settings.openai_api_key)
+
+provider = GeminiProvider()
+
 
 def extract_invoice(text: str) -> Invoice:
-    response = client.responses.parse(
-        model=settings.openai_model,
-        input=[
-            {
-                "role": "system",
-                "content": SYSTEM_PROMPT,
-            },
-            {
-                "role": "user",
-                "content": (
-                    "Extract the invoice information from the "
-                    "following document:\n\n"
-                    f"{text}"
-                ),
-            },
-        ],
-        # pydantic schema to parse the response into
-        text_format=Invoice,
+    if not text.strip():
+        raise ValueError("Invoice text is empty.")
+
+    return provider.extract(
+        text=text,
+        schema=Invoice,
+        system_prompt=SYSTEM_PROMPT,
     )
-
-    if response.output_parsed is None:
-        raise ValueError("The model did not return a valid invoice.")
-
-    return response.output_parsed
