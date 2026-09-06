@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.schemas import Invoice
@@ -28,3 +29,10 @@ def save_invoice(
     db.refresh(db_invoice)
 
     return db_invoice
+
+def get_invoices(db: Session) -> list[InvoiceModel]:
+    statement = select(InvoiceModel).order_by(
+        InvoiceModel.id.desc()
+    )
+
+    return list(db.scalars(statement).all())

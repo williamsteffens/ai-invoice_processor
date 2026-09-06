@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -8,7 +9,10 @@ from pydantic import BaseModel
 from app.ai.schemas import Invoice
 from app.core.database import get_db
 from app.services.invoice_processing import process_invoice
-from app.services.invoice_repository import save_invoice
+from app.services.invoice_repository import (
+    save_invoice,
+    get_invoices,
+)
 
 router = APIRouter(
     prefix="/invoices",
@@ -21,6 +25,44 @@ class InvoiceProcessingResponse(BaseModel):
     validation_errors: list[str]
     invoice: Invoice
 
+class InvoiceListItem(BaseModel):
+    id: int
+    invoice_number: str
+    supplier_name: str
+    supplier_vat_number: str | None
+    invoice_date: date
+    due_date: date | None
+    currency: str
+    subtotal: float
+    vat: float
+    total: float
+    status: str
+
+@router.get(
+    "",
+    response_model=list[InvoiceListItem],
+)
+def list_invoices(
+    db: Session = Depends(get_db),
+):
+    invoices = get_invoices(db)
+
+    return [
+        InvoiceListItem(
+            id=invoice.id,
+            invoice_number=invoice.invoice_number,
+            supplier_name=invoice.supplier_name,
+            supplier_vat_number=invoice.supplier_vat_number,
+            invoice_date=invoice.invoice_date,
+            due_date=invoice.due_date,
+            currency=invoice.currency,
+            subtotal=invoice.subtotal,
+            vat=invoice.vat,
+            total=invoice.total,
+            status=invoice.status,
+        )
+        for invoice in invoices
+    ]
 
 @router.post(
     "",
