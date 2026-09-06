@@ -1,12 +1,14 @@
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile, Depends
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.ai.schemas import Invoice
+from app.core.database import get_db
 from app.services.invoice_processing import process_invoice
-
+from app.services.invoice_repository import save_invoice
 
 router = APIRouter(
     prefix="/invoices",
@@ -26,6 +28,7 @@ class InvoiceProcessingResponse(BaseModel):
 )
 async def create_invoice(
     file: UploadFile = File(...),
+    db: Session = Depends(get_db),
 ):
     if file.content_type != "application/pdf":
         raise HTTPException(
@@ -46,6 +49,12 @@ async def create_invoice(
 
     try:
         result = process_invoice(temp_path)
+
+        save_invoice(
+            db=db,
+            invoice=result.invoice,
+            status=result.status,
+        )
 
         return InvoiceProcessingResponse(
             status=result.status.value,
