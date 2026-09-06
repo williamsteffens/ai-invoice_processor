@@ -4,4 +4,7 @@ pydantic-settings
 sqlalchemy
 psycopg[binary]
 pytest
+python-multipart
 httpx2
+openai
+pypdf
