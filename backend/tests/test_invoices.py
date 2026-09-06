@@ -1,10 +1,10 @@
 from fastapi.testclient import TestClient
-
 from datetime import date
+
 from app.ai.schemas import Invoice, Supplier
 from app.main import app
-
 from app.services import invoice_processing
+from app.services.status import InvoiceStatus
 
 client = TestClient(app)
 
@@ -23,9 +23,9 @@ def test_rejects_non_pdf():
 
     assert response.status_code == 400
 
+
 def test_process_invoice(monkeypatch, tmp_path):
     pdf_path = tmp_path / "invoice.pdf"
-
     pdf_path.write_bytes(b"fake pdf")
 
     expected = Invoice(
@@ -57,5 +57,7 @@ def test_process_invoice(monkeypatch, tmp_path):
 
     result = invoice_processing.process_invoice(pdf_path)
 
-    assert result.invoice_number == "INV-001"
-    assert result.total == 10000
+    assert result.invoice.invoice_number == "INV-001"
+    assert result.invoice.total == 10000
+    assert result.status == InvoiceStatus.APPROVED
+    assert result.validation_errors == []

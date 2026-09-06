@@ -2,13 +2,28 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from pydantic import BaseModel
 
 from app.ai.schemas import Invoice
 from app.services.invoice_processing import process_invoice
 
-router = APIRouter(prefix="/invoices", tags=["invoices"])
 
-@router.post("", response_model=Invoice)
+router = APIRouter(
+    prefix="/invoices",
+    tags=["invoices"],
+)
+
+
+class InvoiceProcessingResponse(BaseModel):
+    status: str
+    validation_errors: list[str]
+    invoice: Invoice
+
+
+@router.post(
+    "",
+    response_model=InvoiceProcessingResponse,
+)
 async def create_invoice(
     file: UploadFile = File(...),
 ):
@@ -18,7 +33,9 @@ async def create_invoice(
             detail="Only PDF files are supported.",
         )
 
-    suffix = Path(file.filename or "invoice.pdf").suffix
+    suffix = Path(
+        file.filename or "invoice.pdf"
+    ).suffix
 
     with NamedTemporaryFile(
         suffix=suffix,
@@ -28,7 +45,13 @@ async def create_invoice(
         temp_path = Path(temp_file.name)
 
     try:
-        return process_invoice(temp_path)
+        result = process_invoice(temp_path)
+
+        return InvoiceProcessingResponse(
+            status=result.status.value,
+            validation_errors=result.validation_errors,
+            invoice=result.invoice,
+        )
 
     except ValueError as exc:
         raise HTTPException(
