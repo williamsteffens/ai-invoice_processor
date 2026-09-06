@@ -6,6 +6,20 @@ from app.models.invoice import InvoiceModel
 from app.services.status import InvoiceStatus
 
 
+def get_invoice(db: Session, invoice_id: int) -> InvoiceModel | None:
+    statement = select(InvoiceModel).where(
+        InvoiceModel.id == invoice_id
+    )
+
+    return db.scalars(statement).first()
+
+def get_invoices(db: Session) -> list[InvoiceModel]:
+    statement = select(InvoiceModel).order_by(
+        InvoiceModel.id.desc()
+    )
+
+    return list(db.scalars(statement).all())
+
 def save_invoice(
     db: Session,
     invoice: Invoice,
@@ -29,10 +43,3 @@ def save_invoice(
     db.refresh(db_invoice)
 
     return db_invoice
-
-def get_invoices(db: Session) -> list[InvoiceModel]:
-    statement = select(InvoiceModel).order_by(
-        InvoiceModel.id.desc()
-    )
-
-    return list(db.scalars(statement).all())

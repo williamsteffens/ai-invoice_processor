@@ -10,8 +10,9 @@ from app.ai.schemas import Invoice
 from app.core.database import get_db
 from app.services.invoice_processing import process_invoice
 from app.services.invoice_repository import (
-    save_invoice,
+    get_invoice,
     get_invoices,
+    save_invoice,
 )
 
 router = APIRouter(
@@ -37,6 +38,37 @@ class InvoiceListItem(BaseModel):
     vat: float
     total: float
     status: str
+
+
+@router.get(
+    "/{invoice_id}",
+    response_model=InvoiceListItem,
+)
+def get_invoice_by_id(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+):
+    invoice = get_invoice(db, invoice_id)
+
+    if not invoice:
+        raise HTTPException(
+            status_code=404,
+            detail="Invoice not found.",
+        )
+
+    return InvoiceListItem(
+        id=invoice.id,
+        invoice_number=invoice.invoice_number,
+        supplier_name=invoice.supplier_name,
+        supplier_vat_number=invoice.supplier_vat_number,
+        invoice_date=invoice.invoice_date,
+        due_date=invoice.due_date,
+        currency=invoice.currency,
+        subtotal=invoice.subtotal,
+        vat=invoice.vat,
+        total=invoice.total,
+        status=invoice.status,
+    )
 
 @router.get(
     "",

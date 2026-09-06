@@ -5,6 +5,18 @@ import type {
 
 const API_URL = "http://localhost:8000/api";
 
+export async function getInvoice(
+    invoiceId: number
+): Promise<InvoiceListItem> {
+  const response = await fetch(`${API_URL}/invoices/${invoiceId}`);
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch invoice");
+  }
+
+  return response.json();
+}
+
 export async function getInvoices(): Promise<InvoiceListItem[]> {
   const response = await fetch(`${API_URL}/invoices`);
 
