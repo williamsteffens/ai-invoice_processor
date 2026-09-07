@@ -28,6 +28,7 @@ def test_save_invoice(db_session):
         db=db_session,
         invoice=invoice,
         status=InvoiceStatus.APPROVED,
+        validation_errors=[],
     )
 
     assert saved.id is not None
@@ -56,6 +57,7 @@ def test_get_invoices(db_session):
         db=db_session,
         invoice=invoice,
         status=InvoiceStatus.APPROVED,
+        validation_errors=[],
     )
 
     invoices = get_invoices(db_session)

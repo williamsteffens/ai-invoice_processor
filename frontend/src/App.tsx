@@ -1,17 +1,28 @@
 import { useEffect, useState } from "react";
 
 import {
+    getInvoice,
     getInvoices,
     uploadInvoice,
+    updateInvoiceStatus,
 } from "./api";
 
-import type { InvoiceListItem } from "./types";
+import type {
+    InvoiceDetail,
+    InvoiceListItem
+} from "./types";
 
 
 function App() {
     const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [selectedInvoice, setSelectedInvoice] = useState<InvoiceListItem | null>(null);
+    const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDetail | null>(null);
+    const [isReviewing, setIsReviewing] = useState(false);
+    const [reviewStatus, setReviewStatus] =
+        useState<
+            "approved" | "needs_review" | "rejected" | "failed"
+        >("approved");
+    const [reviewNote, setReviewNote] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -56,6 +67,108 @@ function App() {
             );
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function openInvoice(
+        invoice: InvoiceListItem,
+    ) {
+        try {
+            setError(null);
+
+            const detail = await getInvoice(invoice.id);
+
+            setSelectedInvoice(detail);
+            setReviewStatus(
+                detail.status as
+                | "approved"
+                | "needs_review"
+                | "rejected"
+                | "failed"
+            );
+            setReviewNote(
+                detail.review_note ?? "",
+            );
+            setIsReviewing(false);
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Failed to load invoice",
+            );
+        }
+    }
+
+    async function handleReview() {
+        if (!selectedInvoice) {
+            return;
+        }
+
+        try {
+            setLoading(true);
+            setError(null);
+
+            await updateInvoiceStatus(
+                selectedInvoice.id,
+                reviewStatus,
+                reviewNote,
+            );
+
+            const updated = await getInvoice(
+                selectedInvoice.id,
+            );
+
+            setSelectedInvoice(updated);
+            setIsReviewing(false);
+            setReviewNote("");
+
+            await loadInvoices();
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Failed to review invoice",
+            );
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    function getStatusClasses(status: string) {
+        switch (status) {
+            case "approved":
+                return "rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700";
+
+            case "needs_review":
+                return "rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-700";
+
+            case "rejected":
+                return "rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700";
+
+            case "failed":
+                return "rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700";
+
+            default:
+                return "rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700";
+        }
+    }
+
+    function getStatusLabel(status: string) {
+        switch (status) {
+            case "approved":
+                return "Approved";
+
+            case "needs_review":
+                return "Needs review";
+
+            case "rejected":
+                return "Rejected";
+
+            case "failed":
+                return "Failed";
+
+            default:
+                return status;
         }
     }
 
@@ -108,120 +221,230 @@ function App() {
 
                 {selectedInvoice && (
                     <section className="mb-8 rounded-xl bg-white p-6 shadow-sm">
-                        <div className="mb-6 flex items-center justify-between">
+                        <div className="mb-6 flex items-start justify-between">
                             <div>
                                 <h2 className="text-xl font-semibold">
                                     {selectedInvoice.invoice_number}
                                 </h2>
 
                                 <p className="text-sm text-gray-500">
-                                    Invoice details
+                                    {selectedInvoice.supplier_name}
                                 </p>
                             </div>
 
                             <button
                                 onClick={() => setSelectedInvoice(null)}
-                                className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50"
+                                className="rounded-lg border px-4 py-2 text-sm"
                             >
                                 Close
                             </button>
                         </div>
 
-                        <div className="grid gap-6 md:grid-cols-2">
-                            <div>
-                                <p className="text-sm text-gray-500">
-                                    Supplier
-                                </p>
+                        {selectedInvoice.validation_errors.length > 0 && (
+                            <div className="mb-6 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+                                <h3 className="font-semibold text-yellow-800">
+                                    Validation issues
+                                </h3>
 
-                                <p className="font-medium">
-                                    {selectedInvoice.supplier_name}
-                                </p>
+                                <ul className="mt-2 list-disc pl-5 text-sm text-yellow-700">
+                                    {selectedInvoice.validation_errors.map(
+                                        (error) => (
+                                            <li key={error}>{error}</li>
+                                        ),
+                                    )}
+                                </ul>
                             </div>
+                        )}
 
-                            <div>
-                                <p className="text-sm text-gray-500">
-                                    VAT number
-                                </p>
+                        <div className="mb-6">
+                            <h3 className="mb-3 font-semibold">
+                                Line items
+                            </h3>
 
-                                <p className="font-medium">
-                                    {selectedInvoice.supplier_vat_number ?? "—"}
-                                </p>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="border-b text-gray-500">
+                                        <tr>
+                                            <th className="py-2">Description</th>
+                                            <th className="py-2">Qty</th>
+                                            <th className="py-2">Unit price</th>
+                                            <th className="py-2">Total</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody className="divide-y">
+                                        {selectedInvoice.line_items.map(
+                                            (item) => (
+                                                <tr key={item.id}>
+                                                    <td className="py-3">
+                                                        {item.description}
+                                                    </td>
+
+                                                    <td className="py-3">
+                                                        {item.quantity}
+                                                    </td>
+
+                                                    <td className="py-3">
+                                                        {item.unit_price.toFixed(2)}
+                                                    </td>
+
+                                                    <td className="py-3 font-medium">
+                                                        {item.total.toFixed(2)}
+                                                    </td>
+                                                </tr>
+                                            ),
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
+                        </div>
 
-                            <div>
-                                <p className="text-sm text-gray-500">
-                                    Invoice date
-                                </p>
-
-                                <p className="font-medium">
-                                    {selectedInvoice.invoice_date}
-                                </p>
-                            </div>
-
-                            <div>
-                                <p className="text-sm text-gray-500">
-                                    Due date
-                                </p>
-
-                                <p className="font-medium">
-                                    {selectedInvoice.due_date ?? "—"}
-                                </p>
-                            </div>
-
-                            <div>
-                                <p className="text-sm text-gray-500">
-                                    Subtotal
-                                </p>
-
-                                <p className="font-medium">
+                        <div className="mb-6 ml-auto max-w-sm space-y-2 text-sm">
+                            <div className="flex justify-between">
+                                <span>Subtotal</span>
+                                <span>
                                     {selectedInvoice.subtotal.toFixed(2)}{" "}
                                     {selectedInvoice.currency}
-                                </p>
+                                </span>
                             </div>
 
-                            <div>
-                                <p className="text-sm text-gray-500">
-                                    VAT
-                                </p>
-
-                                <p className="font-medium">
+                            <div className="flex justify-between">
+                                <span>VAT</span>
+                                <span>
                                     {selectedInvoice.vat.toFixed(2)}{" "}
                                     {selectedInvoice.currency}
-                                </p>
+                                </span>
                             </div>
 
-                            <div>
-                                <p className="text-sm text-gray-500">
-                                    Total
-                                </p>
-
-                                <p className="text-lg font-semibold">
+                            <div className="flex justify-between border-t pt-2 font-semibold">
+                                <span>Total</span>
+                                <span>
                                     {selectedInvoice.total.toFixed(2)}{" "}
                                     {selectedInvoice.currency}
-                                </p>
-                            </div>
-
-                            <div>
-                                <p className="text-sm text-gray-500">
-                                    Processing status
-                                </p>
-
-                                <span className="font-medium">
-                                    {selectedInvoice.status}
                                 </span>
                             </div>
                         </div>
 
-                        {selectedInvoice.status === "needs_review" && (
-                            <div className="mt-6 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-                                <h3 className="font-semibold text-yellow-800">
-                                    Human review required
-                                </h3>
+                        <div className="border-t pt-6">
+                            {!isReviewing ? (
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h3 className="font-semibold">
+                                            Human review
+                                        </h3>
 
-                                <p className="mt-1 text-sm text-yellow-700">
-                                    This invoice failed one or more validation checks.
-                                    Review the extracted values before approving it.
-                                </p>
+                                        <p className="mt-1 text-sm text-gray-500">
+                                            Manually verify or change the
+                                            processing status.
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        onClick={() => {
+                                            setReviewStatus(
+                                                selectedInvoice.status as
+                                                | "approved"
+                                                | "needs_review"
+                                                | "rejected"
+                                                | "failed"
+                                            );
+
+                                            setReviewNote(
+                                                selectedInvoice.review_note ?? "",
+                                            );
+
+                                            setIsReviewing(true);
+                                        }}
+                                        className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50"
+                                    >
+                                        Review document
+                                    </button>
+                                </div>
+                            ) : (
+                                <div>
+                                    <h3 className="mb-4 font-semibold">
+                                        Review document
+                                    </h3>
+
+                                    <label className="mb-2 block text-sm font-medium">
+                                        Status
+                                    </label>
+
+                                    <select
+                                        value={reviewStatus}
+                                        onChange={(event) =>
+                                            setReviewStatus(
+                                                event.target.value as
+                                                | "approved"
+                                                | "needs_review"
+                                                | "rejected"
+                                                | "failed"
+                                            )
+                                        }
+                                        className="mb-4 w-full rounded-lg border p-3 text-sm"
+                                    >
+                                        <option value="approved">
+                                            Approved
+                                        </option>
+
+                                        <option value="needs_review">
+                                            Needs review
+                                        </option>
+
+                                        <option value="rejected">
+                                            Rejected
+                                        </option>
+
+                                        <option value="failed">
+                                            Failed
+                                        </option>
+                                    </select>
+
+                                    <label className="mb-2 block text-sm font-medium">
+                                        Review note
+                                    </label>
+
+                                    <textarea
+                                        value={reviewNote}
+                                        onChange={(event) =>
+                                            setReviewNote(event.target.value)
+                                        }
+                                        placeholder="Add a review note..."
+                                        className="mb-4 w-full rounded-lg border p-3 text-sm"
+                                        rows={3}
+                                    />
+
+                                    <div className="flex justify-end gap-3">
+                                        <button
+                                            onClick={() =>
+                                                setIsReviewing(false)
+                                            }
+                                            disabled={loading}
+                                            className="rounded-lg border px-5 py-2.5 text-sm font-medium hover:bg-gray-50"
+                                        >
+                                            Cancel
+                                        </button>
+
+                                        <button
+                                            onClick={handleReview}
+                                            disabled={loading}
+                                            className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                                        >
+                                            {loading
+                                                ? "Saving..."
+                                                : "Save status"}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {selectedInvoice.reviewed_at && (
+                            <div className="border-t pt-4 text-sm text-gray-500">
+                                Reviewed:{" "}
+                                {new Date(
+                                    selectedInvoice.reviewed_at,
+                                ).toLocaleString()}
                             </div>
                         )}
                     </section>
@@ -250,7 +473,7 @@ function App() {
                                 {invoices.map((invoice) => (
                                     <tr
                                         key={invoice.id}
-                                        onClick={() => setSelectedInvoice(invoice)}
+                                        onClick={() => openInvoice(invoice)}
                                         className="cursor-pointer hover:bg-gray-50"
                                     >
                                         <td className="px-6 py-4 font-medium">
@@ -271,14 +494,8 @@ function App() {
                                         </td>
 
                                         <td className="px-6 py-4">
-                                            <span
-                                                className={
-                                                    invoice.status === "approved"
-                                                        ? "rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700"
-                                                        : "rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-700"
-                                                }
-                                            >
-                                                {invoice.status}
+                                            <span className={getStatusClasses(invoice.status)}>
+                                                {getStatusLabel(invoice.status)}
                                             </span>
                                         </td>
                                     </tr>
