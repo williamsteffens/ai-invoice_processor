@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
-from backend.app.api.routes import health_controller
-from backend.app.api.routes import invoices_controller
+from app.api.routes import health_controller
+from app.api.routes import invoices_controller
 
 api_router = APIRouter()
 
