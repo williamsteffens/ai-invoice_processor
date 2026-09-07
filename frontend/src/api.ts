@@ -6,6 +6,7 @@ import type {
 
 const API_URL = "http://localhost:8000/api";
 
+
 export async function getInvoice(
     invoiceId: number
 ): Promise<InvoiceDetail> {
@@ -76,4 +77,23 @@ export async function updateInvoiceStatus(
     }
 
     return response.json();
+}
+
+export async function deleteInvoice(
+    id: number,
+): Promise<void> {
+    const response = await fetch(
+        `${API_URL}/invoices/${id}`,
+        {
+            method: "DELETE",
+        },
+    );
+
+    if (!response.ok) {
+        const error = await response.json();
+
+        throw new Error(
+            error.detail ?? "Failed to delete invoice",
+        );
+    }
 }

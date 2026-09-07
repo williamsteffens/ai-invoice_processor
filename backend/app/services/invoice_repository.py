@@ -100,3 +100,17 @@ def review_invoice(
     db.refresh(invoice)
 
     return invoice
+
+def delete_invoice(
+    db: Session,
+    invoice_id: int,
+) -> bool:
+    invoice = get_invoice(db, invoice_id)
+
+    if invoice is None:
+        return False
+
+    db.delete(invoice)
+    db.commit()
+
+    return True

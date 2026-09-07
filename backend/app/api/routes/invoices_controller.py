@@ -19,6 +19,7 @@ from app.services.invoice_repository import (
     get_invoices,
     save_invoice,
     review_invoice,
+    delete_invoice,
 )
 
 router = APIRouter(
@@ -133,4 +134,24 @@ def update_invoice_status(
         "status": invoice.status,
         "reviewed_at": invoice.reviewed_at,
         "review_note": invoice.review_note,
+    }
+    
+@router.delete("/{invoice_id}")
+def delete_invoice_endpoint(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+):
+    deleted = delete_invoice(
+        db=db,
+        invoice_id=invoice_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail="Invoice not found",
+        )
+
+    return {
+        "message": "Invoice deleted successfully",
     }
